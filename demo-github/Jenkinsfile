@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker { 
-            image 'maven:3.9.10-openjdk-17'  // image Maven avec Java 17
+            image 'maven:3.9.10-sapmachine-17'  // image Maven avec Java 17
             args '-v /var/run/docker.sock:/var/run/docker.sock' // pour Docker in Docker
         }
     }
