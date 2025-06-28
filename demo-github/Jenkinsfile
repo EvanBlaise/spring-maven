@@ -58,8 +58,12 @@ stage('Package') {
   }
 }
 
-sh 'which docker'
-sh 'docker --version'
+  stage('Check Docker') {
+    steps {
+      sh 'which docker'
+      sh 'docker --version'
+     }
+    }
 
     stage('Docker Build') {
       steps {
