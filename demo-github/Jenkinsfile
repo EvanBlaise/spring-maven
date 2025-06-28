@@ -35,7 +35,7 @@ stage('Test') {
 stage('Analyse SonarQube') {
   steps {
     dir('demo-github') {
-      withSonarQubeEnv('sonar') {
+      withSonarQubeEnv('EvanBlaise') {
         sh """
           mvn sonar:sonar \
             -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
