@@ -1,7 +1,5 @@
 pipeline {
-    agent {
-        docker { image 'maven:3.9.10-sapmachine-17' }
-    }
+    agent any
 
     environment {
         IMAGE_NAME           = 'demo-github-app'
@@ -23,6 +21,9 @@ pipeline {
         }
 
         stage('Maven Build & Test') {
+            agent {
+                docker { image 'maven:3.9.10-sapmachine-17' }
+            }
             steps {
                 dir('demo-github') {
                     sh 'mvn clean package'
@@ -31,6 +32,9 @@ pipeline {
         }
 
         stage('SonarQube Analysis') {
+            agent {
+                docker { image 'maven:3.9.10-sapmachine-17' }
+            }
             steps {
                 dir('demo-github') {
                     sh """
