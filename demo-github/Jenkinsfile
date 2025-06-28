@@ -13,6 +13,12 @@ pipeline {
         SONAR_JAVA_BINARIES  = 'target/classes'
     }
 
+    
+    parameters {
+        string(name: 'DOCKER_USERNAME', defaultValue: 'evanblaise', description: 'Docker Hub username')
+        string(name: 'DOCKER_PASSWORD', defaultValue: '', description: 'Docker Hub password or token')
+    }
+    
     stages {
         stage('Checkout') {
             steps {
@@ -50,18 +56,18 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    sh 'ls -l demo-github/target'
                     docker.build("${IMAGE_NAME}:latest", "-f demo-github/Dockerfile demo-github")
                 }
             }
         }
 
-        stage('Docker Push') {
+        stage('Docker Login & Push') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', REGISTRY_CREDENTIALS) {
-                        docker.image("${IMAGE_NAME}:latest").push()
-                    }
+                    sh """
+                      echo '${params.DOCKER_PASSWORD}' | docker login -u '${params.DOCKER_USERNAME}' --password-stdin
+                      docker push evanblaise/demo-github-app:latest
+                    """
                 }
             }
         }
