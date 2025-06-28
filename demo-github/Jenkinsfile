@@ -1,66 +1,58 @@
 pipeline {
-    agent any
-
-    environment {
-        IMAGE_NAME           = 'demo-github-app'
-        REGISTRY_CREDENTIALS = 'dockerhub-creds'
-
-        SONAR_HOST_URL       = 'http://192.168.136.143:9000'
-        SONAR_TOKEN          = 'sqp_9e0f3e0d01fd721572a25292068f7964dad8a9f7'
-        SONAR_PROJECT_KEY    = 'EvanBlaise'
-        SONAR_PROJECT_NAME   = 'EvanBlaise'
-        SONAR_SOURCES        = 'src/main/java'
-        SONAR_JAVA_BINARIES  = 'target/classes'
+  agent {
+    docker {
+      image 'maven:3.8.6-openjdk-17'
+      args '-v /var/run/docker.sock:/var/run/docker.sock'
     }
+  }
+  environment {
+    IMAGE_NAME           = 'demo-github-app'
+    REGISTRY_CREDENTIALS = 'dockerhub-creds'
 
-    stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-        stage('Build & Test Maven') {
-            steps {
-                sh 'mvn clean test'
-            }
-        }
-        stage('SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('SonarQube') {
-                    sh "mvn sonar:sonar -Dsonar.projectKey=${SONAR_PROJECT_KEY} " +
-                       "-Dsonar.projectName=${SONAR_PROJECT_NAME} " +
-                       "-Dsonar.sources=${SONAR_SOURCES} " +
-                       "-Dsonar.java.binaries=${SONAR_JAVA_BINARIES} " +
-                       "-Dsonar.host.url=${SONAR_HOST_URL} " +
-                       "-Dsonar.login=${SONAR_TOKEN}"
-                }
-            }
-        }
-        stage('Build Docker Image') {
-            steps {
-                sh "docker build -t ${IMAGE_NAME} ."
-            }
-        }
-        stage('Scan Docker Image') {
-            steps {
-                sh "trivy image --exit-code 1 --severity HIGH,CRITICAL ${IMAGE_NAME} || true"
-            }
-        }
-        stage('Push Docker Image') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: "${REGISTRY_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                    sh "docker tag ${IMAGE_NAME} $DOCKER_USER/${IMAGE_NAME}:latest"
-                    sh "docker push $DOCKER_USER/${IMAGE_NAME}:latest"
-                }
-            }
-        }
-        stage('Deploy Docker Container') {
-            steps {
-                sh "docker stop springboot-app || true"
-                sh "docker rm springboot-app || true"
-                sh "docker run -d -p 8080:8080 --name springboot-app $DOCKER_USER/${IMAGE_NAME}:latest"
-            }
-        }
+    SONAR_HOST_URL       = 'http://192.168.136.143:9000'
+    SONAR_TOKEN          = 'sqp_9e0f3e0d01fd721572a25292068f7964dad8a9f7'
+    SONAR_PROJECT_KEY    = 'EvanBlaise'
+    SONAR_PROJECT_NAME   = 'EvanBlaise'
+    SONAR_SOURCES        = 'src/main/java'
+    SONAR_JAVA_BINARIES  = 'target/classes'
+  }
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
     }
+    stage('Test Maven') {
+      steps {
+        sh 'mvn clean test'
+      }
+    }
+    stage('SonarQube Analysis') {
+      steps {
+        withSonarQubeEnv('SonarQubeServer') {
+          sh """
+            mvn sonar:sonar \
+              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+              -Dsonar.projectName=${SONAR_PROJECT_NAME} \
+              -Dsonar.sources=${SONAR_SOURCES} \
+              -Dsonar.java.binaries=${SONAR_JAVA_BINARIES}
+          """
+        }
+      }
+    }
+    stage('Build Docker Image') {
+      steps {
+        sh "docker build -t ${IMAGE_NAME} ."
+      }
+    }
+    stage('Docker Login & Push') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: "${REGISTRY_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh 'docker login -u $DOCKER_USER -p $DOCKER_PASS'
+          sh "docker tag ${IMAGE_NAME} $DOCKER_USER/${IMAGE_NAME}:latest"
+          sh "docker push $DOCKER_USER/${IMAGE_NAME}:latest"
+        }
+      }
+    }
+  }
 }
