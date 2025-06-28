@@ -1,10 +1,13 @@
 pipeline {
     agent any
 
+    /* ───────────── VARIABLES GLOBALES ───────────── */
     environment {
+        /* Docker */
         IMAGE_NAME           = 'demo-github-app'
         REGISTRY_CREDENTIALS = 'dockerhub-creds'
 
+        /* SonarQube */
         SONAR_HOST_URL       = 'http://192.168.136.143:9000'
         SONAR_TOKEN          = 'sqp_9e0f3e0d01fd721572a25292068f7964dad8a9f7'
         SONAR_PROJECT_KEY    = 'EvanBlaise'
@@ -14,16 +17,15 @@ pipeline {
     }
 
     stages {
+
+        /* 1. Checkout du code */
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            steps { checkout scm }
         }
 
+        /* 2. Build & tests dans un conteneur Maven 17 */
         stage('Maven Build & Test') {
-            agent {
-                docker { image 'maven:3.9.10-sapmachine-17' }
-            }
+            agent { docker { image 'maven:3.9.10-sapmachine-17' } }
             steps {
                 dir('demo-github') {
                     sh 'mvn clean package'
@@ -31,36 +33,46 @@ pipeline {
             }
         }
 
+        /* 3. Analyse SonarQube avec le token -> OK */
         stage('SonarQube Analysis') {
-            agent {
-                docker { image 'maven:3.9.10-sapmachine-17' }
-            }
+            agent { docker { image 'maven:3.9.10-sapmachine-17' } }
             steps {
                 dir('demo-github') {
                     sh """
-                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.login=${SONAR_TOKEN}
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \\
+                            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \\
+                            -Dsonar.projectName=${SONAR_PROJECT_NAME} \\
+                            -Dsonar.sources=${SONAR_SOURCES} \\
+                            -Dsonar.java.binaries=${SONAR_JAVA_BINARIES} \\
+                            -Dsonar.host.url=${SONAR_HOST_URL} \\
+                            -Dsonar.token=${SONAR_TOKEN}
                     """
                 }
             }
         }
 
+        /* 4. Build de l’image Docker (depuis ton Dockerfile) */
         stage('Docker Build') {
             steps {
-                script {
-                    docker.build("${IMAGE_NAME}:latest", "-f demo-github/Dockerfile demo-github")
+                dir('demo-github') {
+                    sh 'docker build -t $IMAGE_NAME:latest .'
                 }
             }
         }
 
+        /* 5. Push de l’image sur Docker Hub */
         stage('Docker Push') {
             steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', REGISTRY_CREDENTIALS) {
-                        docker.image("${IMAGE_NAME}:latest").push()
-                    }
+                withCredentials([usernamePassword(
+                    credentialsId: REGISTRY_CREDENTIALS,
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker tag $IMAGE_NAME:latest $DOCKER_USER/$IMAGE_NAME:latest
+                        docker push $DOCKER_USER/$IMAGE_NAME:latest
+                    '''
                 }
             }
         }
