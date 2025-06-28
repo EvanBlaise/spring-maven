@@ -53,11 +53,13 @@ pipeline {
         stage('Docker Build & Push') {
             steps {
                 script {
-                    docker.build("${IMAGE_NAME}:latest", "-f demo-github/Dockerfile demo-github")
+                    def imageFullName = "${params.DOCKER_USERNAME}/demo-github-app:latest"
+                    docker.build(imageFullName, "-f demo-github/Dockerfile demo-github")
                     sh "echo ${params.DOCKER_PASSWORD} | docker login -u ${params.DOCKER_USERNAME} --password-stdin"
-                    docker.image("${IMAGE_NAME}:latest").push()
+                    docker.image(imageFullName).push()
                 }
             }
-        }
+}
+
     }
 }
