@@ -24,33 +24,39 @@ pipeline {
       }
     }
 
-    stage('Test') {
-      steps {
-        sh 'mvn test'
-      }
+stage('Test') {
+  steps {
+    dir('demo-github') {
+      sh 'mvn test'
     }
+  }
+}
 
-    stage('Analyse SonarQube') {
-      steps {
-        withSonarQubeEnv('EvanBlaise') {
-          sh """
-            mvn sonar:sonar \
-              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-              -Dsonar.projectName=${SONAR_PROJECT_NAME} \
-              -Dsonar.sources=${SONAR_SOURCES} \
-              -Dsonar.java.binaries=${SONAR_JAVA_BINARIES} \
-              -Dsonar.host.url=${SONAR_HOST_URL} \
-              -Dsonar.login=${SONAR_TOKEN}
-          """
-        }
+stage('Analyse SonarQube') {
+  steps {
+    dir('demo-github') {
+      withSonarQubeEnv('EvanBlaise') {
+        sh """
+          mvn sonar:sonar \
+            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+            -Dsonar.projectName=${SONAR_PROJECT_NAME} \
+            -Dsonar.sources=${SONAR_SOURCES} \
+            -Dsonar.java.binaries=${SONAR_JAVA_BINARIES} \
+            -Dsonar.host.url=${SONAR_HOST_URL} \
+            -Dsonar.login=${SONAR_TOKEN}
+        """
       }
     }
+  }
+}
 
-    stage('Package') {
-      steps {
-        sh 'mvn package -DskipTests'
-      }
+stage('Package') {
+  steps {
+    dir('demo-github') {
+      sh 'mvn package -DskipTests'
     }
+  }
+}
 
     stage('Docker Build') {
       steps {
