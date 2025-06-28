@@ -50,6 +50,7 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
+                    sh 'ls -l demo-github/target'
                     docker.build("${IMAGE_NAME}:latest", "-f demo-github/Dockerfile demo-github")
                 }
             }
