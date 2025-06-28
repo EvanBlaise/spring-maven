@@ -1,29 +1,35 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'maven:3.9.10-sapmachine-17'
+            args  '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
+    /* ─────────────── VARIABLES GLOBALES ─────────────── */
     environment {
-        IMAGE_NAME           = 'demo-github-app'
-        REGISTRY_CREDENTIALS = 'dockerhub-creds'
+        // Image à pousser
+        DOCKER_IMAGE = 'evanblaise/demo-github-app:latest'
 
-        SONAR_HOST_URL       = 'http://192.168.136.143:9000'
-        SONAR_TOKEN          = 'sqp_9e0f3e0d01fd721572a25292068f7964dad8a9f7'
-        SONAR_PROJECT_KEY    = 'EvanBlaise'
-        SONAR_PROJECT_NAME   = 'EvanBlaise'
-        SONAR_SOURCES        = 'src/main/java'
-        SONAR_JAVA_BINARIES  = 'target/classes'
+        /* --- SonarQube --- */
+        SONAR_HOST_URL  = 'http://192.168.136.143:9000'
+        SONAR_TOKEN     = 'sqp_9e0f3e0d01fd721572a25292068f7964dad8a9f7'
+        SONAR_PROJECT_KEY   = 'EvanBlaise'
+        SONAR_SOURCES       = 'src/main/java'
+        SONAR_JAVA_BINARIES = 'target/classes'
     }
 
     stages {
+
+        /* ────────────── 1. CHECKOUT ────────────── */
         stage('Checkout') {
             steps {
-                checkout scm
+                git 'https://github.com/EvanBlaise/spring-maven'
             }
         }
 
-        stage('Maven Build & Test') {
-            agent {
-                docker { image 'maven:3.9.10-sapmachine-17' }
-            }
+        /* ───────── 2. BUILD & TEST MAVEN ───────── */
+        stage('Maven package') {
             steps {
                 dir('demo-github') {
                     sh 'mvn clean package'
@@ -31,36 +37,43 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            agent {
-                docker { image 'maven:3.9.10-sapmachine-17' }
-            }
+        /* ─────────── 3. ANALYSE SONAR ─────────── */
+        stage('SonarQube analysis') {
             steps {
                 dir('demo-github') {
                     sh """
                         mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.login=${SONAR_TOKEN}
+                            -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                            -Dsonar.host.url=${SONAR_HOST_URL} \
+                            -Dsonar.token=${SONAR_TOKEN} \
+                            -Dsonar.sources=${SONAR_SOURCES} \
+                            -Dsonar.java.binaries=${SONAR_JAVA_BINARIES}
                     """
                 }
             }
         }
 
-        stage('Docker Build') {
+        /* ───────────── 4. BUILD DOCKER ─────────── */
+        stage('Docker build') {
             steps {
-                script {
-                    docker.build("${IMAGE_NAME}:latest", "-f demo-github/Dockerfile demo-github")
+                dir('demo-github') {
+                    sh 'docker build -t $DOCKER_IMAGE .'
                 }
             }
         }
 
-        stage('Docker Push') {
+        /* ───────────── 5. PUSH DOCKER ──────────── */
+        stage('Docker push') {
             steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', REGISTRY_CREDENTIALS) {
-                        docker.image("${IMAGE_NAME}:latest").push()
-                    }
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push $DOCKER_IMAGE
+                    '''
                 }
             }
         }
