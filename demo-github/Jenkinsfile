@@ -4,7 +4,7 @@ pipeline {
   agent {
     docker {
       // image officielle Jenkins avec Maven + Docker CLI
-      image 'jenkinsci/jnlp-agent-maven'
+      image 'jpetazzo/dind-mvn'
 
       // monte le socket Docker du host + cache Maven
       args  '-v /var/run/docker.sock:/var/run/docker.sock ' +
