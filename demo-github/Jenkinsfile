@@ -37,6 +37,9 @@ pipeline {
             steps {
                 // met le JAR au même niveau que le Dockerfile
                 sh 'cp demo-github/target/demo-github-0.0.1-SNAPSHOT.jar demo-github/app.jar'
+                sh 'ls -l'
+                sh 'ls -l demo-github'
+                sh 'ls -l demo-github/target'
             }
         }
 
