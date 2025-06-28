@@ -8,6 +8,7 @@ class DemoGithubApplicationTests {
 
 	@Test
 	void contextLoads() {
+		    assertTrue(true, "Test de chargement du contexte - toujours vrai");
 	}
 
 }
