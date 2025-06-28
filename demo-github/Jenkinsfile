@@ -1,16 +1,12 @@
 pipeline {
 
   /* -------- Agent Docker tout‑en‑un -------- */
-  agent {
-    docker {
-      // image officielle Jenkins avec Maven + Docker CLI
-      image 'olymahmudmugdho/maven-docker'
-
-      // monte le socket Docker du host + cache Maven
-      args  '-v /var/run/docker.sock:/var/run/docker.sock ' +
-            '-v $HOME/.m2:/root/.m2'
-    }
+agent {
+  docker {
+    image 'olymahmudmugdho/maven-docker'
+    args  '-v /var/jenkins_home/.m2:/root/.m2 -v /var/run/docker.sock:/var/run/docker.sock'
   }
+}
 
   /* -------- Variables d’environnement -------- */
   environment {
