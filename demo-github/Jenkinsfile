@@ -1,0 +1,36 @@
+pipeline {
+  agent any
+  stages {
+    stage('Checkout') {
+      steps { git 'https://github.com/EvanBlaise/spring-maven.git' }
+    }
+    stage('Test') {
+      steps { sh 'mvn test' }
+    }
+    stage('SonarQube Analysis') {
+      steps {
+        withSonarQubeEnv('sonar') {
+          sh 'mvn sonar:sonar -Dsonar.projectKey=EvanBlaise -Dsonar.host.url=http://localhost:9000 -Dsonar.login=$SONAR_TOKEN'
+        }
+      }
+    }
+    stage('Build') {
+      steps { sh 'mvn package -DskipTests' }
+    }
+    stage('Docker Build') {
+      steps { sh 'docker build -t demo-github-app .' }
+    }
+    stage('Docker Scan') {
+      steps { sh 'docker scan demo-github-app || echo "Scan non bloquant"' }
+    }
+    stage('Docker Push') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+          sh 'echo $PASS | docker login -u $USER --password-stdin'
+          sh 'docker tag demo-github-app $USER/demo-github-app:latest'
+          sh 'docker push $USER/demo-github-app:latest'
+        }
+      }
+    }
+  }
+}
