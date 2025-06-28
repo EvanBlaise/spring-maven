@@ -1,35 +1,30 @@
 pipeline {
     agent any
 
-    environment {
-        IMAGE_NAME           = 'demo-github-app'
-        REGISTRY_CREDENTIALS = 'dockerhub-creds'
+    /* ───────── PARAMÈTRES POUR DOCKER ───────── */
+    parameters {
+        string  (name: 'DOCKER_USERNAME', defaultValue: '', description: 'Docker Hub username')
+        password(name: 'DOCKER_PASSWORD', defaultValue: '', description: 'Docker Hub token / password')
+    }
 
+    /* ───────── VARIABLES D’ENVIRONNEMENT ─────── */
+    environment {
+        IMAGE_NAME           = 'demo-github-app'        // sans namespace
         SONAR_HOST_URL       = 'http://192.168.136.143:9000'
         SONAR_TOKEN          = 'sqp_9e0f3e0d01fd721572a25292068f7964dad8a9f7'
         SONAR_PROJECT_KEY    = 'EvanBlaise'
-        SONAR_PROJECT_NAME   = 'EvanBlaise'
-        SONAR_SOURCES        = 'src/main/java'
-        SONAR_JAVA_BINARIES  = 'target/classes'
     }
 
-    
-    parameters {
-        string(name: 'DOCKER_USERNAME', defaultValue: 'evanblaise', description: 'Docker Hub username')
-        string(name: 'DOCKER_PASSWORD', defaultValue: '', description: 'Docker Hub password or token')
-    }
-    
     stages {
+
+        /* 1 ─ Checkout */
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            steps { checkout scm }
         }
 
-        stage('Maven Build & Test') {
-            agent {
-                docker { image 'maven:3.9.10-sapmachine-17' }
-            }
+        /* 2 ─ Build & test Maven */
+        stage('Maven package') {
+            agent { docker { image 'maven:3.9.10-sapmachine-17' } }
             steps {
                 dir('demo-github') {
                     sh 'mvn clean package'
@@ -37,39 +32,56 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            agent {
-                docker { image 'maven:3.9.10-sapmachine-17' }
+        /* 3 ─ Copier le JAR pour Docker (option A) */
+        stage('Copy JAR for Docker') {
+            steps {
+                // met le JAR au même niveau que le Dockerfile
+                sh 'cp demo-github/target/demo-github-0.0.1-SNAPSHOT.jar demo-github/app.jar'
             }
+        }
+
+        /* 4 ─ Build image Docker */
+        stage('Docker build') {
+            steps {
+                script {
+                    // tag complet avec ton namespace Docker Hub
+                    def fullImage = "${params.DOCKER_USERNAME}/${IMAGE_NAME}:latest"
+                    sh "docker build -t ${fullImage} -f demo-github/Dockerfile demo-github"
+                }
+            }
+        }
+
+        /* 5 ─ Login + push DockerHub (strings) */
+        stage('Docker login & push') {
+            steps {
+                script {
+                    def fullImage = "${params.DOCKER_USERNAME}/${IMAGE_NAME}:latest"
+                    sh """
+                        echo '${params.DOCKER_PASSWORD}' | docker login -u '${params.DOCKER_USERNAME}' --password-stdin
+                        docker push ${fullImage}
+                        docker logout
+                    """
+                }
+            }
+        }
+
+        /* 6 ─ Analyse SonarQube */
+        stage('SonarQube analysis') {
+            agent { docker { image 'maven:3.9.10-sapmachine-17' } }
             steps {
                 dir('demo-github') {
                     sh """
-                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.login=${SONAR_TOKEN}
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \\
+                           -Dsonar.projectKey=${SONAR_PROJECT_KEY} \\
+                           -Dsonar.host.url=${SONAR_HOST_URL} \\
+                           -Dsonar.login=${SONAR_TOKEN}
                     """
                 }
             }
         }
+    }
 
-        stage('Docker Build') {
-            steps {
-                script {
-                    docker.build("${IMAGE_NAME}:latest", "-f demo-github/Dockerfile demo-github")
-                }
-            }
-        }
-
-        stage('Docker Login & Push') {
-            steps {
-                script {
-                    sh """
-                      echo '${params.DOCKER_PASSWORD}' | docker login -u '${params.DOCKER_USERNAME}' --password-stdin
-                      docker push evanblaise/demo-github-app:latest
-                    """
-                }
-            }
-        }
+    post {
+        always { cleanWs() }
     }
 }
