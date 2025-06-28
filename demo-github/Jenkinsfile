@@ -27,7 +27,6 @@ pipeline {
             steps {
                 dir('demo-github') {
                     sh 'mvn clean package'
-                     sh 'ls -l target'
                 }
             }
         }
@@ -53,8 +52,6 @@ pipeline {
                 script {
                     sh 'ls -l demo-github/target'
                     docker.build("${IMAGE_NAME}:latest", "-f demo-github/Dockerfile demo-github")
-                                sh 'ls -l demo-github/target'
-            sh 'ls -l demo-github'
                 }
             }
         }
