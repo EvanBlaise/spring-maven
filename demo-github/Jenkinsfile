@@ -1,36 +1,67 @@
 pipeline {
-  agent any
+  /*
+   * Utilise l'image Maven officielle pour disposer de Maven + JDK 17
+   * Monte le socket Docker de l'hôte pour pouvoir builder/pusher des images
+   */
+  agent {
+    docker {
+      image 'maven:3.9.7-eclipse-temurin-17'
+      args  '-v /var/run/docker.sock:/var/run/docker.sock -v $HOME/.m2:/root/.m2'
+    }
+  }
+
+  environment {
+    REGISTRY_CREDENTIALS = 'dockerhub-creds'   // id Jenkins credentials
+    IMAGE_NAME = "demo-github-app"
+    SONAR_TOKEN   = credentials('sonar-token') // id Jenkins credentials (si repo privé Sonar)
+  }
+
   stages {
     stage('Checkout') {
-  steps {
-    echo 'Code déjà récupéré par Jenkins (SCM).'
-  }
-}
-    stage('Test') {
-      steps { sh 'mvn test' }
+      steps {
+        // Le code est déjà check‑out par Jenkins grâce au SCM
+        echo 'Code déjà récupéré.'
+      }
     }
-    stage('SonarQube Analysis') {
+
+    stage('Test') {
+      steps {
+        sh 'mvn test'
+      }
+    }
+
+    stage('Analyse SonarQube') {
       steps {
         withSonarQubeEnv('sonar') {
-          sh 'mvn sonar:sonar -Dsonar.projectKey=EvanBlaise -Dsonar.host.url=http://localhost:9000 -Dsonar.login=$SONAR_TOKEN'
+          sh 'mvn sonar:sonar -Dsonar.projectKey=EvanBlaise -Dsonar.login=$SONAR_TOKEN'
         }
       }
     }
-    stage('Build') {
-      steps { sh 'mvn package -DskipTests' }
+
+    stage('Package') {
+      steps {
+        sh 'mvn package -DskipTests'
+      }
     }
+
     stage('Docker Build') {
-      steps { sh 'docker build -t demo-github-app .' }
+      steps {
+        sh 'docker build -t $IMAGE_NAME .'
+      }
     }
-    stage('Docker Scan') {
-      steps { sh 'docker scan demo-github-app || echo "Scan non bloquant"' }
+
+    stage('Docker Scan (optionnel)') {
+      steps {
+        sh 'docker scan $IMAGE_NAME || echo "Scan non bloquant"'
+      }
     }
+
     stage('Docker Push') {
       steps {
-        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+        withCredentials([usernamePassword(credentialsId: REGISTRY_CREDENTIALS, usernameVariable: 'USER', passwordVariable: 'PASS')]) {
           sh 'echo $PASS | docker login -u $USER --password-stdin'
-          sh 'docker tag demo-github-app $USER/demo-github-app:latest'
-          sh 'docker push $USER/demo-github-app:latest'
+          sh 'docker tag $IMAGE_NAME $USER/$IMAGE_NAME:latest'
+          sh 'docker push $USER/$IMAGE_NAME:latest'
         }
       }
     }
