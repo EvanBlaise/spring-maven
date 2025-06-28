@@ -1,72 +1,59 @@
 pipeline {
-    agent {
-        docker { 
-            image 'maven:3.9.10-sapmachine-17'  // image Maven avec Java 17
-            args '-v /var/run/docker.sock:/var/run/docker.sock' // pour Docker in Docker
-        }
+  agent {
+    docker { image 'maven:3.9.10-sapmachine-17' }
+  }
+
+  environment {
+    IMAGE_NAME           = 'demo-github-app'
+    REGISTRY_CREDENTIALS = 'dockerhub-creds'
+
+    SONAR_HOST_URL       = 'http://192.168.136.143:9000'
+    SONAR_TOKEN          = 'sqp_9e0f3e0d01fd72157292068f7964dad8a9f7'
+    SONAR_PROJECT_KEY    = 'EvanBlaise'
+    SONAR_PROJECT_NAME   = 'EvanBlaise'
+    SONAR_SOURCES        = 'src/main/java'
+    SONAR_JAVA_BINARIES  = 'target/classes'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
     }
-    
-    environment {
-        IMAGE_NAME           = 'demo-github-app'
-        REGISTRY_CREDENTIALS = 'dockerhub-creds'
 
-        SONAR_HOST_URL       = 'http://192.168.136.143:9000'
-        SONAR_TOKEN          = 'sqp_9e0f3e0d01fd721572a25292068f7964dad8a9f7'
-        SONAR_PROJECT_KEY    = 'EvanBlaise'
-        SONAR_PROJECT_NAME   = 'EvanBlaise'
-        SONAR_SOURCES        = 'src/main/java'
-        SONAR_JAVA_BINARIES  = 'target/classes'
+    stage('Build & Test') {
+      steps {
+        dir('demo-github') {
+          sh 'mvn clean package'
+        }
+      }
     }
-    
-    stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
 
-        stage('Maven Build & Test') {
-            steps {
-                sh 'mvn clean package'
-            }
+    stage('SonarQube Analysis') {
+      steps {
+        dir('demo-github') {
+          sh "mvn sonar:sonar -Dsonar.projectKey=${SONAR_PROJECT_KEY} -Dsonar.host.url=${SONAR_HOST_URL} -Dsonar.login=${SONAR_TOKEN}"
         }
-
-        stage('SonarQube Analysis') {
-            steps {
-                withSonarQubeEnv('SonarQube') {  // nom configuré dans Jenkins > SonarQube servers
-                    sh "mvn sonar:sonar \
-                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.login=${SONAR_TOKEN} \
-                        -Dsonar.sources=${SONAR_SOURCES} \
-                        -Dsonar.java.binaries=${SONAR_JAVA_BINARIES}"
-                }
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                script {
-                    docker.build("${IMAGE_NAME}:latest")
-                }
-            }
-        }
-
-        stage('Docker Scan (optionnel)') {
-            steps {
-                // Exemple avec trivy si installé sur l'agent Jenkins
-                sh "trivy image ${IMAGE_NAME}:latest || echo 'Scan failed or skipped'"
-            }
-        }
-
-        stage('Docker Push') {
-            steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', "${REGISTRY_CREDENTIALS}") {
-                        docker.image("${IMAGE_NAME}:latest").push()
-                    }
-                }
-            }
-        }
+      }
     }
+
+    stage('Docker Build') {
+      steps {
+        script {
+          docker.build(IMAGE_NAME, 'demo-github/')
+        }
+      }
+    }
+
+    stage('Docker Push') {
+      steps {
+        script {
+          docker.withRegistry('', REGISTRY_CREDENTIALS) {
+            docker.image(IMAGE_NAME).push()
+          }
+        }
+      }
+    }
+  }
 }
