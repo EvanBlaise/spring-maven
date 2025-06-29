@@ -1,61 +1,38 @@
 pipeline {
     agent any
 
-    /* ───────── PARAMÈTRES POUR DOCKER ───────── */
     parameters {
         string(name: 'DOCKER_USERNAME', defaultValue: '', description: 'Docker Hub username')
         string(name: 'DOCKER_PASSWORD', defaultValue: '', description: 'Docker Hub token / password')
     }
 
-    /* ───────── VARIABLES D’ENVIRONNEMENT ─────── */
     environment {
-        IMAGE_NAME           = 'demo-github-app'        // sans namespace
-        SONAR_HOST_URL       = 'http://192.168.136.143:9000'
-        SONAR_TOKEN          = 'sqp_9e0f3e0d01fd721572a25292068f7964dad8a9f7'
-        SONAR_PROJECT_KEY    = 'EvanBlaise'
+        IMAGE_NAME        = 'demo-github-app'
+        SONAR_HOST_URL    = 'http://192.168.136.143:9000'
+        SONAR_TOKEN       = 'sqp_9e0f3e0d01fd721572a25292068f7964dad8a9f7'
+        SONAR_PROJECT_KEY = 'EvanBlaise'
     }
 
     stages {
 
-        /* 1 ─ Checkout */
-        stage('Checkout') {
-            steps { checkout scm }
-        }
+        stage('Checkout')    { steps { checkout scm } }
 
-        /* 2 ─ Build & test Maven */
         stage('Maven package') {
             agent { docker { image 'maven:3.9.10-sapmachine-17' } }
             steps {
-                dir('demo-github') {
-                    sh 'mvn clean package'
-                }
+                dir('demo-github') { sh 'mvn clean package' }
             }
         }
 
-        /* 3 ─ Copier le JAR pour Docker (option A) */
-        stage('Copy JAR for Docker') {
-            steps {
-                // met le JAR au même niveau que le Dockerfile
-                sh 'ls -l'
-                sh 'ls -l demo-github'
-                sh 'ls -l demo-github/target'
-                sh 'cp demo-github/target/demo-github-0.0.1-SNAPSHOT.jar demo-github/app.jar'
-
-            }
-        }
-
-        /* 4 ─ Build image Docker */
         stage('Docker build') {
             steps {
                 script {
-                    // tag complet avec ton namespace Docker Hub
                     def fullImage = "${params.DOCKER_USERNAME}/${IMAGE_NAME}:latest"
                     sh "docker build -t ${fullImage} -f demo-github/Dockerfile demo-github"
                 }
             }
         }
 
-        /* 5 ─ Login + push DockerHub (strings) */
         stage('Docker login & push') {
             steps {
                 script {
@@ -69,7 +46,6 @@ pipeline {
             }
         }
 
-        /* 6 ─ Analyse SonarQube */
         stage('SonarQube analysis') {
             agent { docker { image 'maven:3.9.10-sapmachine-17' } }
             steps {
@@ -85,7 +61,5 @@ pipeline {
         }
     }
 
-    post {
-        always { cleanWs() }
-    }
+    post { always { cleanWs() } }
 }
