@@ -19,21 +19,19 @@ pipeline {
 
         stage('Maven package') {
             agent { docker { image 'maven:3.9.10-sapmachine-17' } }
-                 script {
-                    def mvnHome = tool 'mvn'
-                    sh "${mvnHome}/bin/mvn clean package -DskipTests"
-                }
+            steps {
+                dir('demo-github') { sh 'mvn clean package' }
+                sh "ls"
+                sh "ls demo-github/target"
+                sh "cp /demo-github/target/demo-github-0.0.1-SNAPSHOT.jar app.jar"
+            }
         }
 
-                stage('Generate Dockerfile') {
+        stage('Docker build') {
             steps {
-                script {
-                    writeFile file: 'Dockerfile', text: '''
-                        FROM eclipse-temurin:21-jre
-                        WORKDIR /app
-                        COPY target/*.jar app.jar
-                        ENTRYPOINT ["java", "-jar", "app.jar"]
-                                            '''.stripIndent()
+                dir('demo-github') {
+                sh "docker build -t demo-github-app ."
+                sh "ls"
                 }
             }
         }
@@ -41,10 +39,13 @@ pipeline {
         stage('Docker login & push') {
             steps {
                 script {
-                    echo '${params.DOCKER_PASSWORD}' | docker login -u '${params.DOCKER_USERNAME}' --password-stdin
-                        def image = docker.build("${DOCKER_IMAGE}:${env.BUILD_NUMBER}")
-                        image.push()
-                        image.push('latest')
+                    def fullImage = "${params.DOCKER_USERNAME}/${IMAGE_NAME}:latest"
+                    sh """
+                        echo '${params.DOCKER_PASSWORD}' | docker login -u '${params.DOCKER_USERNAME}' --password-stdin
+                        docker push ${fullImage}
+                        docker logout
+                    """
+                }
             }
         }
 
