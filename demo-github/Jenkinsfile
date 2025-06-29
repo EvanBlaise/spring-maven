@@ -26,9 +26,8 @@ pipeline {
 
         stage('Docker build') {
             steps {
-                script {
-                    def fullImage = "${params.DOCKER_USERNAME}/${IMAGE_NAME}:latest"
-                    sh "docker build -t ${fullImage} -f demo-github/Dockerfile demo-github"
+                dir('demo-github') {
+                sh "docker build -t demo-github-app ."
                 }
             }
         }
