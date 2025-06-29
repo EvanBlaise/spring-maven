@@ -22,8 +22,8 @@ pipeline {
             steps {
                 dir('demo-github') { sh 'mvn clean package' }
                 sh "ls"
-                sh "ls target"
-                
+                sh "ls demo-github"
+                sh "demo-github@tmp"
             }
         }
 
