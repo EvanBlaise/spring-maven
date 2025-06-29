@@ -20,7 +20,9 @@ pipeline {
         stage('Maven package') {
             agent { docker { image 'maven:3.9.10-sapmachine-17' } }
             steps {
-                dir('demo-github') { sh 'mvn clean package' } {sh 'ls'} {sh 'ls target'}
+                dir('demo-github') { sh 'mvn clean package' }
+                sh "ls"
+                sh "ls target"
                 
             }
         }
