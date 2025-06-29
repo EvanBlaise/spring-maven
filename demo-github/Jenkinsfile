@@ -23,7 +23,7 @@ pipeline {
                 dir('demo-github') { sh 'mvn clean package' }
                 sh "ls"
                 sh "ls demo-github/target"
-                sh "cp /demo-github/target/demo-github-0.0.1-SNAPSHOT.jar app.jar"
+                sh 'cp demo-github/target/demo-github-0.0.1-SNAPSHOT.jar demo-github/app.jar'
             }
         }
 
